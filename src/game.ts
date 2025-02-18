@@ -295,9 +295,9 @@ export class Game {
         this.ctx.fillStyle = 'red';
         this.ctx.fillRect(
             this.canvas.width - nextObstacleSize,
-            this.canvas.height,  // Ustawiamy na dole zielonej linii
+            this.canvas.height,
             nextObstacleSize,
-            -nextObstacleSize  // Rośnie w górę
+            -nextObstacleSize
         );
         this.ctx.restore();
     }
@@ -324,7 +324,6 @@ export class Game {
                 this.obstacles.push(obstacle);
             }
             this.lastObstacleTime = currentTime;
-            // Stały minimalny interwał dla danej prędkości
             const minInterval = 1500 - (this.obstacleSpeed * 100);
             this.obstacleInterval = Math.max(this.obstacleInterval - 10, minInterval);
             this.updateNextObstaclePosition();
@@ -586,14 +585,15 @@ class Obstacle {
         this.gameMode = gameMode;
         this.verticalSpeed = this.canMove ? (Math.random() * 2 - 1) * 3 : 0;
         
-        // Zwiększamy rozmiar przeszkód w czasie
+        // Stały początkowy rozmiar dla wszystkich trybów
         const currentSize = 30 + Obstacle.sizeIncrease;
         this.width = currentSize;
         this.height = currentSize;
         
         this.y = y;
+        // Zwiększamy rozmiar tylko w trybie score
         if (this.gameMode === 'score') {
-            Obstacle.sizeIncrease += 1; // Zwiększamy tempo wzrostu
+            Obstacle.sizeIncrease += 1;
         }
     }
 
