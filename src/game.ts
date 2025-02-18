@@ -83,7 +83,6 @@ export class Game {
     }
 
     private initGame() {
-        // W trybie "score" gracz jest zawsze w stałej pozycji X
         const playerX = this.gameMode === 'select' ? 50 : (this.gameMode === 'score' ? 200 : 50);
         this.player = new Player(playerX, this.canvas.height - 30, this.gameMode === 'select' ? 'score' : this.gameMode);
         this.obstacles = [];
@@ -91,7 +90,8 @@ export class Game {
         this.gameOver = false;
         this.gameWon = false;
         this.lastObstacleTime = 0;
-        this.obstacleInterval = 1000;
+        // Ustawiamy interwał bazowy na podstawie prędkości
+        this.obstacleInterval = 2500 - (this.obstacleSpeed * 200);
         Obstacle.resetSizeIncrease();
         this.updateNextObstaclePosition();
     }
@@ -288,46 +288,26 @@ export class Game {
 
     private drawSpawnLine() {
         const currentSize = 30 + Obstacle.getCurrentSizeIncrease();
-        const nextObstacleSize = this.obstaclesCanMove ? currentSize : currentSize + 20;
+        const nextObstacleSize = currentSize;
 
         this.ctx.save();
         this.ctx.globalAlpha = 0.3;
         this.ctx.fillStyle = 'red';
         this.ctx.fillRect(
             this.canvas.width - nextObstacleSize,
-            this.obstaclesCanMove ? this.nextObstacleY : this.canvas.height - nextObstacleSize,
+            this.canvas.height,  // Ustawiamy na dole zielonej linii
             nextObstacleSize,
-            nextObstacleSize
+            -nextObstacleSize  // Rośnie w górę
         );
-
-        // Rysujemy linię pokazującą zakres ruchu tylko dla latających przeszkód
-        if (this.obstaclesCanMove) {
-            this.ctx.globalAlpha = 0.4;
-            this.ctx.strokeStyle = 'red';
-            this.ctx.lineWidth = 3;
-            this.ctx.setLineDash([8, 8]);
-            this.ctx.beginPath();
-            this.ctx.moveTo(this.canvas.width - nextObstacleSize, this.minHeight);
-            this.ctx.lineTo(this.canvas.width - nextObstacleSize, this.maxHeight);
-            this.ctx.stroke();
-        }
         this.ctx.restore();
     }
 
     private updateObstacles() {
         const currentTime = Date.now();
         if (currentTime - this.lastObstacleTime > this.obstacleInterval) {
-            let obstacleY;
             const currentSize = 30 + Obstacle.getCurrentSizeIncrease();
-            const obstacleSize = this.obstaclesCanMove ? currentSize : currentSize + 20;
-            
-            if (this.obstaclesCanMove) {
-                obstacleY = this.nextObstacleY;
-            } else {
-                obstacleY = this.canvas.height - obstacleSize;
-            }
+            const obstacleY = this.canvas.height - currentSize;
 
-            // Tworzymy przeszkodę tylko jeśli nie jesteśmy w trybie select
             if (this.gameMode !== 'select') {
                 const obstacle = new Obstacle(
                     this.canvas.width,
@@ -338,14 +318,15 @@ export class Game {
                     this.gameMode
                 );
                 
-                // W trybie "score" przeszkody poruszają się szybciej z czasem
                 const speedMultiplier = this.gameMode === 'score' ? (1 + Obstacle.getCurrentSizeIncrease() / 25) : 1;
                 obstacle.setSpeed(this.obstacleSpeed * speedMultiplier);
                 
                 this.obstacles.push(obstacle);
             }
             this.lastObstacleTime = currentTime;
-            this.obstacleInterval = this.obstacleInterval - 20;
+            // Stały minimalny interwał dla danej prędkości
+            const minInterval = 1500 - (this.obstacleSpeed * 100);
+            this.obstacleInterval = Math.max(this.obstacleInterval - 10, minInterval);
             this.updateNextObstaclePosition();
         }
 
@@ -426,6 +407,9 @@ export class Game {
     private initGameWithMode(mode: 'score' | 'finish', speed: number, canJump: boolean, canMove: boolean) {
         this.gameMode = mode;
         this.obstacleSpeed = speed;
+        // Dla szybszej prędkości (np. 10) będzie krótszy interwał (więcej przeszkód)
+        // Dla wolniejszej prędkości (np. 2.5) będzie dłuższy interwał (mniej przeszkód)
+        this.obstacleInterval = 2000 * (2.5 / speed);
         this.canJumpOnPlatforms = canJump;
         this.obstaclesCanMove = canMove;
         this.initGame();
@@ -602,17 +586,15 @@ class Obstacle {
         this.gameMode = gameMode;
         this.verticalSpeed = this.canMove ? (Math.random() * 2 - 1) * 3 : 0;
         
-        // Zwiększamy rozmiar przeszkód niezależnie od trybu, bez limitu
+        // Zwiększamy rozmiar przeszkód w czasie
         const currentSize = 30 + Obstacle.sizeIncrease;
-        if (!this.canMove) {
-            this.width = currentSize + 20;
-            this.height = currentSize + 20;
-        } else {
-            this.width = currentSize;
-            this.height = currentSize;
-        }
+        this.width = currentSize;
+        this.height = currentSize;
+        
         this.y = y;
-        Obstacle.sizeIncrease += 1;
+        if (this.gameMode === 'score') {
+            Obstacle.sizeIncrease += 1; // Zwiększamy tempo wzrostu
+        }
     }
 
     static resetSizeIncrease() {
@@ -638,6 +620,16 @@ class Obstacle {
             const finalSpeed = this.gameMode === 'score' ? this._speed * speedMultiplier : this._speed;
             this.x -= finalSpeed;
             
+            // Aktualizujemy rozmiar przeszkody
+            if (this.gameMode === 'score') {
+                const currentSize = 30 + Obstacle.sizeIncrease;
+                const oldHeight = this.height;
+                this.width = currentSize;
+                this.height = currentSize;
+                // Przesuwamy przeszkodę w górę o różnicę wysokości
+                this.y -= (this.height - oldHeight);
+            }
+            
             if (this.canMove) {
                 this.y += this.verticalSpeed;
                 
@@ -658,6 +650,6 @@ class Obstacle {
 
     draw(ctx: CanvasRenderingContext2D) {
         ctx.fillStyle = 'red';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.fillRect(this.x, this.y, this.width, this.height);  // Rysujemy od dołu w górę
     }
 } 
